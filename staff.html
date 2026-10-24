@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>นัดเก็บขยะชิ้นใหญ่และขยะอันตราย</title>
+    <meta name="robots" content="noindex, nofollow">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans min-h-screen text-gray-800 pb-12">
+
+    <header class="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-900 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/15 p-2 rounded-xl backdrop-blur-md">
+                    <span class="text-2xl">🚛</span>
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold">นัดเก็บขยะชิ้นใหญ่และขยะอันตราย</h1>
+                    <p class="text-xs text-emerald-200 opacity-90">ส่วนงานเจ้าหน้าที่จัดการคิวคำขอ</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="hidden sm:inline-flex bg-emerald-500/20 text-emerald-100 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-semibold">
+                    👑 แผงควบคุมเจ้าหน้าที่
+                </span>
+                <span id="userEmail" class="hidden md:inline text-xs text-emerald-100 opacity-90"></span>
+                <button id="logoutBtn" onclick="logout()" class="hidden bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition">
+                    ออกจากระบบ
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- หน้าล็อกอินเจ้าหน้าที่ -->
+    <section id="loginView" class="hidden max-w-sm mx-auto p-4 mt-12">
+        <div class="bg-white rounded-2xl shadow-md p-6 border border-slate-200/80">
+            <div class="text-center mb-5">
+                <div class="text-4xl mb-2">🔐</div>
+                <h2 class="text-lg font-bold text-gray-800">เข้าสู่ระบบเจ้าหน้าที่</h2>
+                <p class="text-xs text-gray-500 mt-1">เฉพาะเจ้าหน้าที่ที่ได้รับอนุญาตเท่านั้น</p>
+            </div>
+            <form onsubmit="login(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">อีเมล</label>
+                    <input type="email" id="loginEmail" required autocomplete="username" class="w-full p-3 bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none transition" placeholder="staff@example.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">รหัสผ่าน</label>
+                    <input type="password" id="loginPassword" required autocomplete="current-password" class="w-full p-3 bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none transition" placeholder="••••••••">
+                </div>
+                <p id="loginError" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-2.5"></p>
+                <button type="submit" id="loginBtn" class="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white p-3 rounded-xl font-bold shadow-md transition disabled:opacity-60">
+                    เข้าสู่ระบบ
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <main id="appMain" class="hidden max-w-5xl mx-auto p-4 space-y-6 mt-2">
+        <div>
+            <h2 class="text-base font-bold text-gray-800 mb-3 flex items-center space-x-2">
+                <span>📊</span>
+                <span>ภาพรวมคำขอ</span>
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-blue-500">
+                    <p class="text-3xl font-bold text-gray-800" id="totalRequests">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">คำขอทั้งหมด</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-amber-500">
+                    <p class="text-3xl font-bold text-amber-600" id="pendingRequests">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">รอตรวจ</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-emerald-500">
+                    <p class="text-3xl font-bold text-emerald-600" id="completedRequests">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">เก็บแล้ว/อนุมัติ</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-purple-500">
+                    <p class="text-3xl font-bold text-purple-600" id="totalWeight">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">จำนวนชิ้นรวม</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-md p-6 border border-slate-200/80">
+            <div class="flex justify-between items-center mb-5 border-b pb-3 border-gray-100">
+                <h2 class="text-base font-bold text-gray-800 flex items-center space-x-2">
+                    <span>📑</span>
+                    <span>รายการคำขอจากประชาชน</span>
+                </h2>
+                <button onclick="fetchRequests()" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold px-3 py-2 rounded-xl transition flex items-center space-x-1 border border-emerald-200">
+                    <span>🔄</span>
+                    <span>รีเฟรชข้อมูล</span>
+                </button>
+            </div>
+
+            <div id="requestListContainer" class="space-y-4">
+                <p class="text-center text-gray-500 py-8">กำลังโหลดข้อมูล...</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ⚠️ URL ต้องตรงกับ project ref ใน anon key: qygskcsprypamperuors (ไม่มี g เกิน)
+        const SUPABASE_URL = 'https://qygskcsprypamperuors.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5Z3NrY3NwcnlwYW1wZXJ1b3JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzODQ0NTcsImV4cCI6MjEwNzk2MDQ1N30.L2e0FYOwlYSnYMe1dQvjaxQqbXgD0ERY35du_sQihao';
+        const TABLE_NAME = 'waste_requests';
+
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ---------- ระบบล็อกอิน (Supabase Auth) ----------
+        let currentUserId = null;
+
+        function showView(session) {
+            const loginView = document.getElementById('loginView');
+            const appMain = document.getElementById('appMain');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const userEmail = document.getElementById('userEmail');
+
+            if (session) {
+                loginView.classList.add('hidden');
+                appMain.classList.remove('hidden');
+                logoutBtn.classList.remove('hidden');
+                userEmail.innerText = session.user.email || '';
+                // โหลดข้อมูลเฉพาะตอนเปลี่ยนผู้ใช้ (ไม่โหลดซ้ำตอน token refresh)
+                if (currentUserId !== session.user.id) {
+                    currentUserId = session.user.id;
+                    fetchRequests();
+                }
+            } else {
+                currentUserId = null;
+                appMain.classList.add('hidden');
+                logoutBtn.classList.add('hidden');
+                userEmail.innerText = '';
+                document.getElementById('requestListContainer').innerHTML = '';
+                loginView.classList.remove('hidden');
+            }
+        }
+
+        async function login(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errBox = document.getElementById('loginError');
+            const btn = document.getElementById('loginBtn');
+
+            errBox.classList.add('hidden');
+            btn.disabled = true;
+            btn.innerText = 'กำลังเข้าสู่ระบบ...';
+
+            const { error } = await _supabase.auth.signInWithPassword({ email, password });
+
+            btn.disabled = false;
+            btn.innerText = 'เข้าสู่ระบบ';
+
+            if (error) {
+                console.error(error);
+                errBox.innerText = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            document.getElementById('loginPassword').value = '';
+            // การแสดงหน้าหลักจัดการโดย onAuthStateChange ด้านล่าง
+        }
+
+        async function logout() {
+            await _supabase.auth.signOut();
+        }
+
+        _supabase.auth.onAuthStateChange((event, session) => {
+            showView(session);
+        });
+
+        window.onload = async function () {
+            const { data: { session } } = await _supabase.auth.getSession();
+            showView(session);
+        };
+
+        // ป้องกันข้อความจากประชาชนแทรก HTML/สคริปต์เข้าหน้าเจ้าหน้าที่
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        async function fetchRequests() {
+            const container = document.getElementById('requestListContainer');
+            container.innerHTML = '<p class="text-center text-gray-500 py-8">กำลังโหลดข้อมูล...</p>';
+
+            try {
+                const { data, error } = await _supabase
+                    .from(TABLE_NAME)
+                    .select('*')
+                    .order('ID', { ascending: false });
+
+                if (error) {
+                    console.error(error);
+                    container.innerHTML = `<div class="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"><p class="font-bold">เกิดข้อผิดพลาดในการดึงข้อมูล:</p><p>${esc(error.message)}</p></div>`;
+                    return;
+                }
+
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<p class="text-center text-gray-400 py-12">ยังไม่มีรายการคำขอส่งเข้ามาในระบบ<br><span class="text-xs">(ถ้ามีข้อมูลในตารางแต่ขึ้นข้อความนี้ แปลว่า RLS ยังไม่มี policy แบบ SELECT)</span></p>';
+                    updateDashboardCards([]);
+                    return;
+                }
+
+                updateDashboardCards(data);
+                renderRequestList(data);
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<p class="text-red-500 text-center py-4">เกิดข้อผิดพลาดในการเชื่อมต่อ: ${esc(err.message)}</p>`;
+            }
+        }
+
+        function getVal(item, keys) {
+            for (let k of keys) {
+                if (item[k] !== undefined && item[k] !== null) return item[k];
+            }
+            return '';
+        }
+
+        function updateDashboardCards(data) {
+            document.getElementById('totalRequests').innerText = data.length;
+
+            const pending = data.filter(i => {
+                const st = getVal(i, ['สถานะคำขอ']);
+                return !st || st === 'รอตรวจ';
+            }).length;
+
+            const completed = data.filter(i => {
+                const st = getVal(i, ['สถานะคำขอ']);
+                return st === 'เก็บแล้ว' || st === 'นัดหมายแล้ว';
+            }).length;
+
+            const totalQty = data.reduce((sum, i) => sum + (Number(i['จำนวนชิ้น']) || 1), 0);
+
+            document.getElementById('pendingRequests').innerText = pending;
+            document.getElementById('completedRequests').innerText = completed;
+            document.getElementById('totalWeight').innerText = totalQty;
+        }
+
+        function renderRequestList(data) {
+            const container = document.getElementById('requestListContainer');
+            container.innerHTML = '';
+
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "border border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-white transition shadow-sm space-y-2";
+
+                const itemId = item['ID'];
+                const reqCode = item['รหัสคำขอ'] || `BK-${itemId}`;
+                const name = item['ชื่อผู้ขอ'] || 'ไม่ระบุชื่อ';
+                const phone = item['เบอร์โทรศัพท์'] || '-';
+                const zone = item['โซนพื้นที่'] || '-';
+                const address = item['ที่อยู่และจุดวางขยะ'] || '-';
+                const mapPos = item['พิกัดแผนที่'] || '';
+                const wasteType = item['ประเภทขยะ'] || '-';
+                const qty = item['จำนวนชิ้น'] || 1;
+                const appDate = item['วันนัดหมาย'] || '-';
+                const method = item['วิธีการส่ง'] || '-';
+                const status = item['สถานะคำขอ'] || 'รอตรวจ';
+
+                let statusBadge = '';
+                if (status === 'รอตรวจ') {
+                    statusBadge = `<span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">⏳ รอตรวจ</span>`;
+                } else if (status === 'นัดหมายแล้ว') {
+                    statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">📅 นัดหมายแล้ว</span>`;
+                } else if (status === 'เก็บแล้ว') {
+                    statusBadge = `<span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">✅ เก็บเรียบร้อย</span>`;
+                } else {
+                    statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">❌ ไม่รับ</span>`;
+                }
+
+                const mapLink = mapPos
+                    ? `<a href="https://www.google.com/maps?q=${encodeURIComponent(mapPos)}" target="_blank" rel="noopener" class="text-emerald-700 underline">เปิดแผนที่</a>`
+                    : '';
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center pb-2 border-b border-gray-200">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-emerald-800 text-sm bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">${esc(reqCode)}</span>
+                            <span class="font-semibold text-gray-800 text-base">${esc(name)}</span>
+                        </div>
+                        ${statusBadge}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600 pt-1">
+                        <p>📍 <strong>วิธีทิ้ง/ชุมชน:</strong> ${esc(method)} | ${esc(zone)}</p>
+                        <p>📦 <strong>สิ่งของ:</strong> ${esc(wasteType)} (${esc(qty)} ชิ้น)</p>
+                        <p>📅 <strong>วันนัดเก็บ:</strong> <span class="font-bold text-gray-800">${esc(appDate)}</span></p>
+                        <p>📞 <strong>เบอร์โทร:</strong> <a href="tel:${esc(phone)}" class="text-emerald-700 underline">${esc(phone)}</a></p>
+                    </div>
+
+                    <p class="text-xs text-gray-500 bg-white p-2.5 rounded-lg border border-gray-200">
+                        🏠 <strong>จุดวางขยะ/ที่อยู่:</strong> ${esc(address)} ${mapLink}
+                    </p>
+
+                    ${status === 'รอตรวจ' ? `
+                        <div class="flex gap-2 mt-3 pt-2 border-t border-gray-200">
+                            <button onclick="updateStatus(${Number(itemId)}, 'นัดหมายแล้ว')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">
+                                ✓ อนุมัตินัดหมาย
+                            </button>
+                            <button onclick="updateStatus(${Number(itemId)}, 'ไม่รับ')" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold px-4 py-2 rounded-xl transition">
+                                ✕ ไม่รับรายการ
+                            </button>
+                        </div>
+                    ` : status === 'นัดหมายแล้ว' ? `
+                        <div class="flex gap-2 mt-3 pt-2 border-t border-gray-200">
+                            <button onclick="updateStatus(${Number(itemId)}, 'เก็บแล้ว')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">
+                                ✅ เก็บเรียบร้อยแล้ว
+                            </button>
+                        </div>
+                    ` : ''}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function updateStatus(id, newStatus) {
+            if (!confirm(`คุณต้องการเปลี่ยนสถานะรายการนี้เป็น "${newStatus}" ใช่หรือไม่?`)) return;
+
+            // .select() ทำให้รู้ว่ามีแถวถูกอัปเดตจริงหรือไม่
+            const { data, error } = await _supabase
+                .from(TABLE_NAME)
+                .update({ 'สถานะคำขอ': newStatus })
+                .eq('ID', id)
+                .select();
+
+            if (error) {
+                alert('เกิดข้อผิดพลาดในการอัปเดต: ' + error.message);
+            } else if (!data || data.length === 0) {
+                alert('อัปเดตไม่สำเร็จ (0 แถว) น่าจะยังไม่มี RLS policy แบบ UPDATE ในตาราง waste_requests');
+            } else {
+                fetchRequests();
+            }
+        }
+    </script>
+</body>
+</html>
