@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>นัดเก็บขยะชิ้นใหญ่และขยะอันตราย</title>
+    <meta name="robots" content="noindex, nofollow">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+
+        /* ใบงานสำหรับพิมพ์ (ซ่อนบนหน้าจอ) */
+        #printArea { display: none; }
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            body > *:not(#printArea) { display: none !important; }
+            body { background: #fff !important; }
+            #printArea { display: block !important; font-family: 'Sarabun', sans-serif; color: #000; }
+            #printArea h1 { font-size: 16px; font-weight: 700; margin: 0 0 2px; }
+            #printArea .meta { font-size: 11px; margin-bottom: 8px; }
+            #printArea table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+            #printArea th, #printArea td { border: 1px solid #444; padding: 4px 5px; vertical-align: top; text-align: left; }
+            #printArea th { background: #e5e7eb; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            #printArea tr { page-break-inside: avoid; }
+            #printArea .nowrap { white-space: nowrap; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans min-h-screen text-gray-800 pb-12">
+
+    <header class="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-900 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/15 p-2 rounded-xl backdrop-blur-md">
+                    <span class="text-2xl">🚛</span>
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold">นัดเก็บขยะชิ้นใหญ่และขยะอันตราย</h1>
+                    <p class="text-xs text-emerald-200 opacity-90">ส่วนงานเจ้าหน้าที่จัดการคิวคำขอ</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="hidden sm:inline-flex bg-emerald-500/20 text-emerald-100 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-semibold">
+                    👑 แผงควบคุมเจ้าหน้าที่
+                </span>
+                <span id="userEmail" class="hidden md:inline text-xs text-emerald-100 opacity-90"></span>
+                <button id="logoutBtn" onclick="logout()" class="hidden bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition">
+                    ออกจากระบบ
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- หน้าล็อกอินเจ้าหน้าที่ -->
+    <section id="loginView" class="hidden max-w-sm mx-auto p-4 mt-12">
+        <div class="bg-white rounded-2xl shadow-md p-6 border border-slate-200/80">
+            <div class="text-center mb-5">
+                <div class="text-4xl mb-2">🔐</div>
+                <h2 class="text-lg font-bold text-gray-800">เข้าสู่ระบบเจ้าหน้าที่</h2>
+                <p class="text-xs text-gray-500 mt-1">เฉพาะเจ้าหน้าที่ที่ได้รับอนุญาตเท่านั้น</p>
+            </div>
+            <form onsubmit="login(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">อีเมล</label>
+                    <input type="email" id="loginEmail" required autocomplete="username" class="w-full p-3 bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none transition" placeholder="staff@example.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">รหัสผ่าน</label>
+                    <input type="password" id="loginPassword" required autocomplete="current-password" class="w-full p-3 bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none transition" placeholder="••••••••">
+                </div>
+                <p id="loginError" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-2.5"></p>
+                <button type="submit" id="loginBtn" class="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white p-3 rounded-xl font-bold shadow-md transition disabled:opacity-60">
+                    เข้าสู่ระบบ
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <main id="appMain" class="hidden max-w-5xl mx-auto p-4 space-y-6 mt-2">
+        <div>
+            <h2 class="text-base font-bold text-gray-800 mb-3 flex items-center space-x-2">
+                <span>📊</span>
+                <span>ภาพรวมคำขอ</span>
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-blue-500">
+                    <p class="text-3xl font-bold text-gray-800" id="totalRequests">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">คำขอทั้งหมด</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-amber-500">
+                    <p class="text-3xl font-bold text-amber-600" id="pendingRequests">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">รอตรวจ</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-emerald-500">
+                    <p class="text-3xl font-bold text-emerald-600" id="completedRequests">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">เก็บแล้ว/อนุมัติ</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-purple-500">
+                    <p class="text-3xl font-bold text-purple-600" id="totalWeight">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">จำนวนชิ้นรวม</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- แท็บ -->
+        <div class="flex gap-2 border-b border-gray-300">
+            <button id="tabListBtn" onclick="showTab('list')" class="px-4 py-2.5 text-sm font-bold rounded-t-xl transition">📑 รายการคำขอ</button>
+            <button id="tabPlanBtn" onclick="showTab('plan')" class="px-4 py-2.5 text-sm font-bold rounded-t-xl transition">🗺️ แผนเก็บรายวัน</button>
+        </div>
+
+        <div id="listView">
+        <div class="bg-white rounded-2xl shadow-md p-6 border border-slate-200/80">
+            <div class="flex flex-wrap justify-between items-center gap-2 mb-4 border-b pb-3 border-gray-100">
+                <h2 class="text-base font-bold text-gray-800 flex items-center space-x-2">
+                    <span>📑</span>
+                    <span>รายการคำขอจากประชาชน</span>
+                </h2>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportCSV()" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-2 rounded-xl transition border border-blue-200">
+                        ⬇️ ส่งออก Excel (CSV)
+                    </button>
+                    <button onclick="printWorksheet()" class="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold px-3 py-2 rounded-xl transition border border-purple-200">
+                        🖨️ พิมพ์ใบงาน
+                    </button>
+                    <button onclick="fetchRequests()" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold px-3 py-2 rounded-xl transition border border-emerald-200">
+                        🔄 รีเฟรชข้อมูล
+                    </button>
+                </div>
+            </div>
+
+            <!-- ตัวกรอง -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <input type="search" id="searchInput" oninput="applyFilters()" placeholder="🔍 ค้นหาชื่อ / เบอร์ / รหัส / ที่อยู่" class="p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                <select id="filterStatus" onchange="applyFilters()" class="p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                    <option value="">ทุกสถานะ</option>
+                    <option value="รอตรวจ">⏳ รอตรวจ</option>
+                    <option value="นัดหมายแล้ว">📅 นัดหมายแล้ว</option>
+                    <option value="เก็บแล้ว">✅ เก็บแล้ว</option>
+                    <option value="ไม่รับ">❌ ไม่รับ</option>
+                </select>
+                <select id="filterZone" onchange="applyFilters()" class="p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                    <option value="">ทุกชุมชน</option>
+                </select>
+                <div class="flex gap-2">
+                    <input type="date" id="filterDate" onchange="applyFilters()" class="flex-1 min-w-0 p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                    <button onclick="setToday()" class="text-xs bg-slate-100 hover:bg-slate-200 border border-gray-300 rounded-xl px-2.5 font-semibold text-gray-700 whitespace-nowrap">วันนี้</button>
+                </div>
+            </div>
+            <div class="flex justify-between items-center mb-4">
+                <p id="resultInfo" class="text-xs text-gray-500"></p>
+                <button onclick="clearFilters()" class="text-xs text-gray-500 hover:text-gray-800 underline">ล้างตัวกรอง</button>
+            </div>
+
+            <div id="requestListContainer" class="space-y-4">
+                <p class="text-center text-gray-500 py-8">กำลังโหลดข้อมูล...</p>
+            </div>
+        </div>
+        </div><!-- /listView -->
+
+        <!-- ===== แผนเก็บรายวัน ===== -->
+        <div id="planView" class="hidden space-y-5">
+
+            <div class="bg-white rounded-2xl shadow-md p-5 border border-slate-200/80 space-y-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <label class="text-sm font-semibold text-gray-700">วันที่เก็บ</label>
+                    <input type="date" id="planDate" onchange="renderPlan()" class="p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    <button onclick="selectPlanDate(todayStr())" class="text-xs bg-slate-100 hover:bg-slate-200 border border-gray-300 rounded-xl px-3 py-2.5 font-semibold text-gray-700">วันนี้</button>
+                    <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                        <input type="checkbox" id="planIncludePending" onchange="renderPlan()" class="w-4 h-4 accent-emerald-600">
+                        รวมคำขอที่ยังรอตรวจ
+                    </label>
+                </div>
+                <p id="planHint" class="text-xs text-amber-700"></p>
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 mb-2">7 วันข้างหน้า (กดเพื่อเลือกวัน)</p>
+                    <div id="weekStrip" class="flex gap-2 overflow-x-auto pb-1"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-blue-500">
+                    <p class="text-3xl font-bold text-blue-700" id="planStops">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">จุดที่ต้องไปเก็บ</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-purple-500">
+                    <p class="text-3xl font-bold text-purple-700" id="planPieces">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">ชิ้นที่ต้องเก็บ</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-emerald-500">
+                    <p class="text-3xl font-bold text-emerald-700" id="planDone">0/0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">เก็บแล้ว / จุดทั้งหมด</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center border-l-4 border-l-amber-500">
+                    <p class="text-3xl font-bold text-amber-700" id="planDrop">0</p>
+                    <p class="text-xs font-medium text-gray-500 mt-1">นำมาทิ้งที่จุดนัด (ราย)</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="bg-white rounded-2xl shadow-md p-5 border border-slate-200/80">
+                    <h3 class="text-sm font-bold text-gray-800 mb-3">🏘️ สรุปตามชุมชน</h3>
+                    <div id="zoneSummary" class="overflow-x-auto"></div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-md p-5 border border-slate-200/80">
+                    <h3 class="text-sm font-bold text-gray-800 mb-3">📦 สรุปตามประเภทสิ่งของ</h3>
+                    <div id="typeSummary" class="overflow-x-auto"></div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-md p-5 border border-slate-200/80 space-y-3">
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <h3 class="text-sm font-bold text-gray-800">🗺️ แผนที่จุดเก็บ (รถไปรับถึงบ้าน)</h3>
+                    <p class="text-xs text-gray-500">🏢 ลากหมุดจุดเริ่มต้นเพื่อย้าย ระบบจะเรียงลำดับใหม่ให้</p>
+                </div>
+                <div id="planMap" class="relative z-0 w-full rounded-xl border border-gray-300" style="height: 420px;"></div>
+                <div class="flex flex-wrap gap-3 text-xs text-gray-600">
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#2563eb;"></span> นัดหมายแล้ว</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#d97706;"></span> รอตรวจ</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#059669;"></span> เก็บแล้ว</span>
+                </div>
+                <p id="planDistance" class="text-xs text-gray-500"></p>
+                <div id="mapsLinks" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-md p-5 border border-slate-200/80">
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+                    <h3 class="text-sm font-bold text-gray-800">🚚 ลำดับจุดเก็บที่แนะนำ</h3>
+                    <button onclick="printPlan()" class="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold px-3 py-2 rounded-xl transition border border-purple-200">
+                        🖨️ พิมพ์ใบงานเส้นทาง
+                    </button>
+                </div>
+                <div id="stopList" class="space-y-3"></div>
+            </div>
+        </div><!-- /planView -->
+    </main>
+
+    <!-- ใบงานสำหรับพิมพ์ -->
+    <div id="printArea"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // ⚠️ URL ต้องตรงกับ project ref ใน anon key: qygskcsprypamperuors (ไม่มี g เกิน)
+        const SUPABASE_URL = 'https://qygskcsprypamperuors.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5Z3NrY3NwcnlwYW1wZXJ1b3JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzODQ0NTcsImV4cCI6MjEwNzk2MDQ1N30.L2e0FYOwlYSnYMe1dQvjaxQqbXgD0ERY35du_sQihao';
+        const TABLE_NAME = 'waste_requests';
+
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let allData = [];
+        let filteredData = [];
+
+        // ---------- ระบบล็อกอิน (Supabase Auth) ----------
+        let currentUserId = null;
+
+        function showView(session) {
+            const loginView = document.getElementById('loginView');
+            const appMain = document.getElementById('appMain');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const userEmail = document.getElementById('userEmail');
+
+            if (session) {
+                loginView.classList.add('hidden');
+                appMain.classList.remove('hidden');
+                logoutBtn.classList.remove('hidden');
+                userEmail.innerText = session.user.email || '';
+                if (!document.getElementById('planDate').value) document.getElementById('planDate').value = todayStr();
+                if (currentUserId !== session.user.id) {
+                    currentUserId = session.user.id;
+                    fetchRequests();
+                }
+            } else {
+                currentUserId = null;
+                allData = [];
+                filteredData = [];
+                appMain.classList.add('hidden');
+                logoutBtn.classList.add('hidden');
+                userEmail.innerText = '';
+                document.getElementById('requestListContainer').innerHTML = '';
+                document.getElementById('printArea').innerHTML = '';
+                clearPlanMap();
+                showTab('list');
+                loginView.classList.remove('hidden');
+            }
+        }
+
+        async function login(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errBox = document.getElementById('loginError');
+            const btn = document.getElementById('loginBtn');
+
+            errBox.classList.add('hidden');
+            btn.disabled = true;
+            btn.innerText = 'กำลังเข้าสู่ระบบ...';
+
+            const { error } = await _supabase.auth.signInWithPassword({ email, password });
+
+            btn.disabled = false;
+            btn.innerText = 'เข้าสู่ระบบ';
+
+            if (error) {
+                console.error(error);
+                errBox.innerText = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            document.getElementById('loginPassword').value = '';
+        }
+
+        async function logout() {
+            await _supabase.auth.signOut();
+        }
+
+        _supabase.auth.onAuthStateChange((event, session) => {
+            showView(session);
+        });
+
+        window.onload = async function () {
+            showTab('list');
+            const { data: { session } } = await _supabase.auth.getSession();
+            showView(session);
+        };
+
+        // ---------- เครื่องมือช่วย ----------
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        function fmtDateTime(v) {
+            if (!v) return '';
+            const d = new Date(v);
+            if (isNaN(d)) return '';
+            return d.toLocaleString('th-TH', {
+                timeZone: 'Asia/Bangkok',
+                day: 'numeric', month: 'short', year: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function statusOf(item) {
+            return item['สถานะคำขอ'] || 'รอตรวจ';
+        }
+
+        // ---------- ดึงข้อมูล ----------
+        async function fetchRequests() {
+            const container = document.getElementById('requestListContainer');
+            container.innerHTML = '<p class="text-center text-gray-500 py-8">กำลังโหลดข้อมูล...</p>';
+
+            try {
+                const { data, error } = await _supabase
+                    .from(TABLE_NAME)
+                    .select('*')
+                    .order('ID', { ascending: false });
+
+                if (error) {
+                    console.error(error);
+                    container.innerHTML = `<div class="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"><p class="font-bold">เกิดข้อผิดพลาดในการดึงข้อมูล:</p><p>${esc(error.message)}</p></div>`;
+                    return;
+                }
+
+                allData = data || [];
+                updateDashboardCards(allData);
+                rebuildZoneOptions();
+                applyFilters();
+                if (currentTab === 'plan') renderPlan();
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<p class="text-red-500 text-center py-4">เกิดข้อผิดพลาดในการเชื่อมต่อ: ${esc(err.message)}</p>`;
+            }
+        }
+
+        function updateDashboardCards(data) {
+            document.getElementById('totalRequests').innerText = data.length;
+            document.getElementById('pendingRequests').innerText =
+                data.filter(i => statusOf(i) === 'รอตรวจ').length;
+            document.getElementById('completedRequests').innerText =
+                data.filter(i => ['เก็บแล้ว', 'นัดหมายแล้ว'].includes(statusOf(i))).length;
+            document.getElementById('totalWeight').innerText =
+                data.reduce((sum, i) => sum + (Number(i['จำนวนชิ้น']) || 1), 0);
+        }
+
+        function rebuildZoneOptions() {
+            const sel = document.getElementById('filterZone');
+            const keep = sel.value;
+            const zones = [...new Set(allData.map(i => i['โซนพื้นที่']).filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b, 'th'));
+            sel.innerHTML = '<option value="">ทุกชุมชน</option>' +
+                zones.map(z => `<option value="${esc(z)}">${esc(z)}</option>`).join('');
+            if (zones.includes(keep)) sel.value = keep;
+        }
+
+        // ---------- ค้นหา / กรอง ----------
+        function applyFilters() {
+            const q = document.getElementById('searchInput').value.trim().toLowerCase();
+            const qDigits = q.replace(/\D/g, '');
+            const st = document.getElementById('filterStatus').value;
+            const zone = document.getElementById('filterZone').value;
+            const date = document.getElementById('filterDate').value;
+
+            filteredData = allData.filter(i => {
+                if (st && statusOf(i) !== st) return false;
+                if (zone && i['โซนพื้นที่'] !== zone) return false;
+                if (date && i['วันนัดหมาย'] !== date) return false;
+                if (q) {
+                    const hay = [i['ชื่อผู้ขอ'], i['รหัสคำขอ'], i['เบอร์โทรศัพท์'], i['ที่อยู่และจุดวางขยะ']]
+                        .join(' ').toLowerCase();
+                    const phoneDigits = String(i['เบอร์โทรศัพท์'] || '').replace(/\D/g, '');
+                    const phoneHit = qDigits.length >= 3 && phoneDigits.includes(qDigits);
+                    if (!hay.includes(q) && !phoneHit) return false;
+                }
+                return true;
+            });
+
+            document.getElementById('resultInfo').innerText =
+                `แสดง ${filteredData.length} จาก ${allData.length} รายการ`;
+            renderRequestList(filteredData);
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterZone').value = '';
+            document.getElementById('filterDate').value = '';
+            applyFilters();
+        }
+
+        function setToday() {
+            document.getElementById('filterDate').value = todayStr();
+            applyFilters();
+        }
+
+        // ---------- แสดงรายการ ----------
+        function renderRequestList(data) {
+            const container = document.getElementById('requestListContainer');
+            container.innerHTML = '';
+
+            if (allData.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 py-12">ยังไม่มีรายการคำขอส่งเข้ามาในระบบ<br><span class="text-xs">(ถ้ามีข้อมูลในตารางแต่ขึ้นข้อความนี้ แปลว่า RLS ยังไม่มี policy แบบ SELECT)</span></p>';
+                return;
+            }
+            if (data.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 py-12">ไม่พบรายการตามเงื่อนไขที่เลือก</p>';
+                return;
+            }
+
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "border border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-white transition shadow-sm space-y-2";
+
+                const itemId = item['ID'];
+                const reqCode = item['รหัสคำขอ'] || `BK-${itemId}`;
+                const name = item['ชื่อผู้ขอ'] || 'ไม่ระบุชื่อ';
+                const phone = item['เบอร์โทรศัพท์'] || '-';
+                const zone = item['โซนพื้นที่'] || '-';
+                const address = item['ที่อยู่และจุดวางขยะ'] || '-';
+                const mapPos = item['พิกัดแผนที่'] || '';
+                const wasteType = item['ประเภทขยะ'] || '-';
+                const qty = item['จำนวนชิ้น'] || 1;
+                const appDate = item['วันนัดหมาย'] || '-';
+                const method = item['วิธีการส่ง'] || '-';
+                const status = statusOf(item);
+                const created = fmtDateTime(item['created_at']);
+
+                let statusBadge = '';
+                if (status === 'รอตรวจ') {
+                    statusBadge = `<span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">⏳ รอตรวจ</span>`;
+                } else if (status === 'นัดหมายแล้ว') {
+                    statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">📅 นัดหมายแล้ว</span>`;
+                } else if (status === 'เก็บแล้ว') {
+                    statusBadge = `<span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">✅ เก็บเรียบร้อย</span>`;
+                } else {
+                    statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">❌ ไม่รับ</span>`;
+                }
+
+                const mapLink = mapPos
+                    ? `<a href="https://www.google.com/maps?q=${encodeURIComponent(mapPos)}" target="_blank" rel="noopener" class="text-emerald-700 underline">เปิดแผนที่</a>`
+                    : '';
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center pb-2 border-b border-gray-200">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-emerald-800 text-sm bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">${esc(reqCode)}</span>
+                            <span class="font-semibold text-gray-800 text-base">${esc(name)}</span>
+                        </div>
+                        ${statusBadge}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600 pt-1">
+                        <p>📍 <strong>วิธีทิ้ง/ชุมชน:</strong> ${esc(method)} | ${esc(zone)}</p>
+                        <p>📦 <strong>สิ่งของ:</strong> ${esc(wasteType)} (${esc(qty)} ชิ้น)</p>
+                        <p>📅 <strong>วันนัดเก็บ:</strong> <span class="font-bold text-gray-800">${esc(appDate)}</span></p>
+                        <p>📞 <strong>เบอร์โทร:</strong> <a href="tel:${esc(phone)}" class="text-emerald-700 underline">${esc(phone)}</a></p>
+                    </div>
+
+                    <p class="text-xs text-gray-500 bg-white p-2.5 rounded-lg border border-gray-200">
+                        🏠 <strong>จุดวางขยะ/ที่อยู่:</strong> ${esc(address)} ${mapLink}
+                    </p>
+                    ${created ? `<p class="text-xs text-gray-400">🕒 ส่งคำขอเมื่อ ${esc(created)}</p>` : ''}
+
+                    ${status === 'รอตรวจ' ? `
+                        <div class="flex gap-2 mt-3 pt-2 border-t border-gray-200">
+                            <button onclick="updateStatus(${Number(itemId)}, 'นัดหมายแล้ว')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">
+                                ✓ อนุมัตินัดหมาย
+                            </button>
+                            <button onclick="updateStatus(${Number(itemId)}, 'ไม่รับ')" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold px-4 py-2 rounded-xl transition">
+                                ✕ ไม่รับรายการ
+                            </button>
+                        </div>
+                    ` : status === 'นัดหมายแล้ว' ? `
+                        <div class="flex gap-2 mt-3 pt-2 border-t border-gray-200">
+                            <button onclick="updateStatus(${Number(itemId)}, 'เก็บแล้ว')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">
+                                ✅ เก็บเรียบร้อยแล้ว
+                            </button>
+                        </div>
+                    ` : ''}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function updateStatus(id, newStatus) {
+            if (!confirm(`คุณต้องการเปลี่ยนสถานะรายการนี้เป็น "${newStatus}" ใช่หรือไม่?`)) return;
+
+            const { data, error } = await _supabase
+                .from(TABLE_NAME)
+                .update({ 'สถานะคำขอ': newStatus })
+                .eq('ID', id)
+                .select();
+
+            if (error) {
+                alert('เกิดข้อผิดพลาดในการอัปเดต: ' + error.message);
+            } else if (!data || data.length === 0) {
+                alert('อัปเดตไม่สำเร็จ (0 แถว) น่าจะยังไม่มี RLS policy แบบ UPDATE ในตาราง waste_requests');
+            } else {
+                fetchRequests();
+            }
+        }
+
+
+        // =====================================================
+        //  แผนเก็บรายวัน (สรุป + แผนที่ + ลำดับเส้นทาง)
+        // =====================================================
+        function ymd(d) {
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+        function todayStr() { return ymd(new Date()); }
+
+        const TAB_ACTIVE = 'px-4 py-2.5 text-sm font-bold rounded-t-xl transition bg-white text-emerald-800 border border-b-white border-gray-300 -mb-px';
+        const TAB_IDLE = 'px-4 py-2.5 text-sm font-bold rounded-t-xl transition text-gray-500 hover:text-gray-800';
+        let currentTab = 'list';
+
+        let planMap = null, planLayer = null, depotMarker = null;
+        let planOrdered = [];   // จุดที่ต้องไปเก็บ เรียงตามลำดับแนะนำ
+        let planNoCoord = [];   // คำขอที่ไม่มีพิกัด
+        let planDoneItems = []; // เก็บแล้ว
+        let planDepot = null;
+
+        function isDropoff(item) {
+            return String(item['วิธีการส่ง'] || '').includes('จุดนัด');
+        }
+
+        function parseCoord(str) {
+            const parts = String(str || '').split(',').map(x => parseFloat(x.trim()));
+            if (parts.length !== 2 || parts.some(isNaN)) return null;
+            const lat = parts[0], lng = parts[1];
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+            return { lat, lng };
+        }
+
+        function haversine(a, b) {
+            const R = 6371, rad = Math.PI / 180;
+            const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+            const h = Math.sin(dLat / 2) ** 2 +
+                Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+            return 2 * R * Math.asin(Math.sqrt(h));
+        }
+
+        // เรียงจุดแบบ "ใกล้สุดก่อน" เริ่มจากจุดเริ่มต้น (ประมาณการด้วยระยะเส้นตรง)
+        function orderByNearest(stops, start) {
+            const remaining = stops.slice();
+            const out = [];
+            let cur = start;
+            while (remaining.length) {
+                let bi = 0, bd = Infinity;
+                for (let k = 0; k < remaining.length; k++) {
+                    const d = haversine(cur, remaining[k]);
+                    if (d < bd) { bd = d; bi = k; }
+                }
+                const nxt = remaining.splice(bi, 1)[0];
+                out.push(nxt);
+                cur = nxt;
+            }
+            return out;
+        }
+
+        function loadDepot() {
+            try {
+                const v = JSON.parse(localStorage.getItem('wasteDepot') || 'null');
+                if (v && typeof v.lat === 'number' && typeof v.lng === 'number') return v;
+            } catch (e) { /* ไม่เป็นไร */ }
+            return null;
+        }
+        function saveDepot(p) {
+            try { localStorage.setItem('wasteDepot', JSON.stringify(p)); } catch (e) { /* ไม่เป็นไร */ }
+        }
+
+        function showTab(tab) {
+            currentTab = tab;
+            document.getElementById('tabListBtn').className = tab === 'list' ? TAB_ACTIVE : TAB_IDLE;
+            document.getElementById('tabPlanBtn').className = tab === 'plan' ? TAB_ACTIVE : TAB_IDLE;
+            document.getElementById('listView').classList.toggle('hidden', tab !== 'list');
+            document.getElementById('planView').classList.toggle('hidden', tab !== 'plan');
+            if (tab === 'plan') {
+                if (!document.getElementById('planDate').value) document.getElementById('planDate').value = todayStr();
+                initPlanMap();
+                renderPlan();
+                // แผนที่ที่ซ่อนอยู่ต้องคำนวณขนาดใหม่หลังแสดง
+                setTimeout(() => {
+                    if (planMap) { planMap.invalidateSize(); fitPlanMap(); }
+                }, 80);
+            }
+        }
+
+        function selectPlanDate(ds) {
+            document.getElementById('planDate').value = ds;
+            renderPlan();
+            if (planMap) setTimeout(() => { planMap.invalidateSize(); fitPlanMap(); }, 50);
+        }
+
+        function initPlanMap() {
+            if (planMap) return;
+            if (typeof L === 'undefined') {
+                document.getElementById('planMap').innerHTML =
+                    '<p class="p-6 text-center text-sm text-red-600">โหลดแผนที่ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้า</p>';
+                return;
+            }
+            planMap = L.map('planMap').setView([13.7563, 100.5018], 12);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: 'Tiles &copy; Esri'
+            }).addTo(planMap);
+            planLayer = L.layerGroup().addTo(planMap);
+        }
+
+        function clearPlanMap() {
+            if (planLayer) planLayer.clearLayers();
+            if (planMap && depotMarker) { planMap.removeLayer(depotMarker); depotMarker = null; }
+            planOrdered = []; planNoCoord = []; planDoneItems = [];
+        }
+
+        function fitPlanMap() {
+            if (!planMap) return;
+            const pts = planOrdered.map(s => [s.lat, s.lng]);
+            planDoneItems.forEach(s => { if (s.lat !== undefined) pts.push([s.lat, s.lng]); });
+            if (planDepot) pts.push([planDepot.lat, planDepot.lng]);
+            if (pts.length === 1) planMap.setView(pts[0], 15);
+            else if (pts.length > 1) planMap.fitBounds(pts, { padding: [30, 30] });
+        }
+
+        function numIcon(label, color) {
+            return L.divIcon({
+                className: '',
+                html: `<div style="background:${color};color:#fff;width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font:700 12px Sarabun,sans-serif;">${label}</div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+                popupAnchor: [0, -14]
+            });
+        }
+
+        function stopPopup(item) {
+            return `<div style="font-family:Sarabun,sans-serif;font-size:13px;line-height:1.5">
+                <strong>${esc(item['ชื่อผู้ขอ'] || 'ไม่ระบุชื่อ')}</strong> (${esc(item['รหัสคำขอ'] || '')})<br>
+                ${esc(item['ประเภทขยะ'] || '-')} (${esc(item['จำนวนชิ้น'] || 1)} ชิ้น)<br>
+                ${esc(item['ที่อยู่และจุดวางขยะ'] || '-')}<br>
+                📞 ${esc(item['เบอร์โทรศัพท์'] || '-')}</div>`;
+        }
+
+        function renderPlan() {
+            const date = document.getElementById('planDate').value;
+            const includePending = document.getElementById('planIncludePending').checked;
+            renderWeekStrip();
+
+            if (!date) return;
+
+            const dayAll = allData.filter(i => i['วันนัดหมาย'] === date && statusOf(i) !== 'ไม่รับ');
+            const items = dayAll.filter(i => includePending || statusOf(i) !== 'รอตรวจ');
+            const pendingHidden = dayAll.length - items.length;
+            document.getElementById('planHint').innerText = pendingHidden > 0
+                ? `⚠️ วันนี้มีคำขอที่ยังรอตรวจอีก ${pendingHidden} รายการ (ยังไม่รวมในแผน) ไปที่แท็บ "รายการคำขอ" เพื่ออนุมัติ หรือติ๊ก "รวมคำขอที่ยังรอตรวจ"`
+                : '';
+
+            const pickups = items.filter(i => !isDropoff(i));
+            const dropoffs = items.filter(isDropoff);
+            const todo = pickups.filter(i => statusOf(i) !== 'เก็บแล้ว');
+            const done = pickups.filter(i => statusOf(i) === 'เก็บแล้ว');
+            const qtyOf = i => Number(i['จำนวนชิ้น']) || 1;
+
+            document.getElementById('planStops').innerText = todo.length;
+            document.getElementById('planPieces').innerText = todo.reduce((s, i) => s + qtyOf(i), 0);
+            document.getElementById('planDone').innerText = `${done.length}/${pickups.length}`;
+            document.getElementById('planDrop').innerText = dropoffs.length;
+
+            renderZoneSummary(items, qtyOf);
+            renderTypeSummary(items, qtyOf);
+
+            // ----- แผนที่และลำดับเส้นทาง -----
+            const withCoord = [], noCoord = [];
+            todo.forEach(i => {
+                const c = parseCoord(i['พิกัดแผนที่']);
+                if (c) withCoord.push({ item: i, lat: c.lat, lng: c.lng });
+                else noCoord.push(i);
+            });
+            const doneStops = [];
+            done.forEach(i => {
+                const c = parseCoord(i['พิกัดแผนที่']);
+                if (c) doneStops.push({ item: i, lat: c.lat, lng: c.lng });
+            });
+
+            // จุดเริ่มต้น: ค่าที่บันทึกไว้ หรือจุดกึ่งกลางของจุดเก็บ
+            planDepot = loadDepot();
+            if (!planDepot && withCoord.length) {
+                planDepot = {
+                    lat: withCoord.reduce((s, p) => s + p.lat, 0) / withCoord.length,
+                    lng: withCoord.reduce((s, p) => s + p.lng, 0) / withCoord.length
+                };
+            }
+
+            planOrdered = planDepot ? orderByNearest(withCoord, planDepot) : withCoord;
+            planNoCoord = noCoord;
+            planDoneItems = doneStops;
+
+            drawPlanMap();
+            renderMapsLinks();
+            renderStopList();
+        }
+
+        function drawPlanMap() {
+            if (!planMap || !planLayer) return;
+            planLayer.clearLayers();
+
+            const latlngs = planDepot ? [[planDepot.lat, planDepot.lng]] : [];
+            planOrdered.forEach((s, idx) => {
+                const color = statusOf(s.item) === 'รอตรวจ' ? '#d97706' : '#2563eb';
+                L.marker([s.lat, s.lng], { icon: numIcon(idx + 1, color) })
+                    .bindPopup(stopPopup(s.item))
+                    .addTo(planLayer);
+                latlngs.push([s.lat, s.lng]);
+            });
+            planDoneItems.forEach(s => {
+                L.marker([s.lat, s.lng], { icon: numIcon('✓', '#059669') })
+                    .bindPopup(stopPopup(s.item))
+                    .addTo(planLayer);
+            });
+            if (planOrdered.length > 0 && latlngs.length > 1) {
+                L.polyline(latlngs, { color: '#2563eb', weight: 3, opacity: 0.6, dashArray: '6 6' }).addTo(planLayer);
+            }
+
+            // หมุดจุดเริ่มต้น (ลากย้ายได้)
+            if (planDepot) {
+                if (!depotMarker) {
+                    depotMarker = L.marker([planDepot.lat, planDepot.lng], {
+                        draggable: true,
+                        icon: L.divIcon({
+                            className: '',
+                            html: '<div style="font-size:26px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))">🏢</div>',
+                            iconSize: [28, 28],
+                            iconAnchor: [14, 14]
+                        }),
+                        zIndexOffset: 1000
+                    }).addTo(planMap);
+                    depotMarker.bindTooltip('จุดเริ่มต้น (ลากเพื่อย้าย)');
+                    depotMarker.on('dragend', () => {
+                        const p = depotMarker.getLatLng();
+                        saveDepot({ lat: p.lat, lng: p.lng });
+                        renderPlan();
+                    });
+                } else {
+                    depotMarker.setLatLng([planDepot.lat, planDepot.lng]);
+                }
+            } else if (depotMarker) {
+                planMap.removeLayer(depotMarker);
+                depotMarker = null;
+            }
+
+            // ระยะทางเส้นตรงโดยประมาณ
+            let km = 0, cur = planDepot;
+            planOrdered.forEach(s => { if (cur) km += haversine(cur, s); cur = s; });
+            document.getElementById('planDistance').innerText = planOrdered.length > 0 && planDepot
+                ? `ระยะทางเส้นตรงโดยประมาณ ${km.toFixed(1)} กม. (ขาไปอย่างเดียว ไม่ใช่ระยะตามถนนจริง) ลำดับนี้เป็นเพียงข้อเสนอแนะ เจ้าหน้าที่ปรับตามหน้างานได้`
+                : '';
+        }
+
+        function renderMapsLinks() {
+            const box = document.getElementById('mapsLinks');
+            if (planOrdered.length === 0 || !planDepot) { box.innerHTML = ''; return; }
+            const size = 9;
+            let origin = planDepot;
+            const links = [];
+            for (let i = 0; i < planOrdered.length; i += size) {
+                const chunk = planOrdered.slice(i, i + size);
+                const dest = chunk[chunk.length - 1];
+                const wps = chunk.slice(0, -1).map(p => `${p.lat},${p.lng}`).join('|');
+                let url = 'https://www.google.com/maps/dir/?api=1&travelmode=driving' +
+                    '&origin=' + encodeURIComponent(`${origin.lat},${origin.lng}`) +
+                    '&destination=' + encodeURIComponent(`${dest.lat},${dest.lng}`);
+                if (wps) url += '&waypoints=' + encodeURIComponent(wps);
+                links.push(`<a href="${url}" target="_blank" rel="noopener" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-2 rounded-xl border border-blue-200">🧭 เปิดนำทาง Google Maps (จุด ${i + 1}-${i + chunk.length})</a>`);
+                origin = dest;
+            }
+            box.innerHTML = links.join('');
+        }
+
+        function renderZoneSummary(items, qtyOf) {
+            const zones = {};
+            items.forEach(i => {
+                const z = i['โซนพื้นที่'] || 'ไม่ระบุ';
+                if (!zones[z]) zones[z] = { pick: 0, drop: 0, qty: 0 };
+                if (isDropoff(i)) zones[z].drop++; else zones[z].pick++;
+                zones[z].qty += qtyOf(i);
+            });
+            const names = Object.keys(zones).sort((a, b) => a.localeCompare(b, 'th'));
+            const box = document.getElementById('zoneSummary');
+            if (names.length === 0) {
+                box.innerHTML = '<p class="text-sm text-gray-400 py-4 text-center">ไม่มีรายการในวันนี้</p>';
+                return;
+            }
+            box.innerHTML = `<table class="w-full text-sm">
+                <thead><tr class="text-left text-xs text-gray-500 border-b">
+                    <th class="py-1.5 pr-2">ชุมชน</th><th class="py-1.5 px-2 text-center">รับถึงบ้าน</th>
+                    <th class="py-1.5 px-2 text-center">นำมาทิ้ง</th><th class="py-1.5 pl-2 text-right">ชิ้น</th>
+                </tr></thead><tbody>` +
+                names.map(n => `<tr class="border-b border-gray-100">
+                    <td class="py-1.5 pr-2">${esc(n)}</td>
+                    <td class="py-1.5 px-2 text-center font-semibold">${zones[n].pick}</td>
+                    <td class="py-1.5 px-2 text-center">${zones[n].drop}</td>
+                    <td class="py-1.5 pl-2 text-right font-semibold">${zones[n].qty}</td></tr>`).join('') +
+                '</tbody></table>';
+        }
+
+        function renderTypeSummary(items, qtyOf) {
+            const types = {};
+            items.forEach(i => {
+                const t = i['ประเภทขยะ'] || 'ไม่ระบุ';
+                if (!types[t]) types[t] = { n: 0, qty: 0 };
+                types[t].n++;
+                types[t].qty += qtyOf(i);
+            });
+            const names = Object.keys(types).sort((a, b) => types[b].qty - types[a].qty);
+            const box = document.getElementById('typeSummary');
+            if (names.length === 0) {
+                box.innerHTML = '<p class="text-sm text-gray-400 py-4 text-center">ไม่มีรายการในวันนี้</p>';
+                return;
+            }
+            box.innerHTML = `<table class="w-full text-sm">
+                <thead><tr class="text-left text-xs text-gray-500 border-b">
+                    <th class="py-1.5 pr-2">ประเภท</th><th class="py-1.5 px-2 text-center">ราย</th><th class="py-1.5 pl-2 text-right">ชิ้น</th>
+                </tr></thead><tbody>` +
+                names.map(n => {
+                    const hazard = n.includes('ขยะอันตราย');
+                    return `<tr class="border-b border-gray-100 ${hazard ? 'bg-red-50' : ''}">
+                        <td class="py-1.5 pr-2">${hazard ? '⚠️ ' : ''}${esc(n)}</td>
+                        <td class="py-1.5 px-2 text-center">${types[n].n}</td>
+                        <td class="py-1.5 pl-2 text-right font-semibold">${types[n].qty}</td></tr>`;
+                }).join('') + '</tbody></table>';
+        }
+
+        function renderWeekStrip() {
+            const sel = document.getElementById('planDate').value;
+            const base = new Date();
+            let html = '';
+            for (let k = 0; k < 7; k++) {
+                const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + k);
+                const ds = ymd(d);
+                const day = allData.filter(i => i['วันนัดหมาย'] === ds && statusOf(i) !== 'ไม่รับ');
+                const pend = day.filter(i => statusOf(i) === 'รอตรวจ').length;
+                const label = d.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' });
+                const active = ds === sel;
+                html += `<button onclick="selectPlanDate('${ds}')" class="shrink-0 text-center px-3 py-2 rounded-xl border text-xs transition ${active ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-50 hover:bg-white text-gray-700 border-gray-300'}">
+                    <div class="font-semibold whitespace-nowrap">${esc(label)}</div>
+                    <div class="text-base font-bold">${day.length}</div>
+                    <div class="${active ? 'text-emerald-100' : 'text-amber-600'}">${pend > 0 ? 'รอตรวจ ' + pend : '&nbsp;'}</div>
+                </button>`;
+            }
+            document.getElementById('weekStrip').innerHTML = html;
+        }
+
+        function stopCardHtml(item, label, muted) {
+            const id = Number(item['ID']);
+            const status = statusOf(item);
+            const c = parseCoord(item['พิกัดแผนที่']);
+            const mapLink = c
+                ? `<a href="https://www.google.com/maps?q=${encodeURIComponent(c.lat + ',' + c.lng)}" target="_blank" rel="noopener" class="text-emerald-700 underline">เปิดแผนที่</a>`
+                : '<span class="text-red-500">ไม่มีพิกัด</span>';
+            const action = status === 'รอตรวจ'
+                ? `<button onclick="updateStatus(${id}, 'นัดหมายแล้ว')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg">✓ อนุมัติ</button>`
+                : status === 'นัดหมายแล้ว'
+                    ? `<button onclick="updateStatus(${id}, 'เก็บแล้ว')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg">✅ เก็บแล้ว</button>`
+                    : '';
+            return `<div class="flex gap-3 border border-slate-200 rounded-xl p-3 ${muted ? 'bg-slate-50 opacity-70' : 'bg-white'}">
+                <div class="shrink-0 w-8 h-8 rounded-full ${muted ? 'bg-emerald-600' : 'bg-blue-600'} text-white font-bold text-sm flex items-center justify-center">${label}</div>
+                <div class="min-w-0 flex-1 text-sm space-y-0.5">
+                    <p class="font-semibold text-gray-800">${esc(item['ชื่อผู้ขอ'] || 'ไม่ระบุชื่อ')}
+                        <span class="text-xs font-normal text-gray-500">${esc(item['รหัสคำขอ'] || '')}</span></p>
+                    <p class="text-gray-600">🏘️ ${esc(item['โซนพื้นที่'] || '-')} · 🏠 ${esc(item['ที่อยู่และจุดวางขยะ'] || '-')}</p>
+                    <p class="text-gray-600">📦 ${esc(item['ประเภทขยะ'] || '-')} (${esc(item['จำนวนชิ้น'] || 1)} ชิ้น)
+                        · 📞 <a href="tel:${esc(item['เบอร์โทรศัพท์'] || '')}" class="text-emerald-700 underline">${esc(item['เบอร์โทรศัพท์'] || '-')}</a>
+                        · ${mapLink}</p>
+                </div>
+                <div class="shrink-0 self-center">${action}</div>
+            </div>`;
+        }
+
+        function renderStopList() {
+            const box = document.getElementById('stopList');
+            let html = '';
+            planOrdered.forEach((s, idx) => { html += stopCardHtml(s.item, idx + 1, false); });
+            if (planNoCoord.length) {
+                html += '<p class="text-xs font-semibold text-red-600 pt-2">ไม่มีพิกัด (จัดลำดับให้ไม่ได้ กรุณาโทรสอบถามที่อยู่)</p>';
+                planNoCoord.forEach(i => { html += stopCardHtml(i, '?', false); });
+            }
+            if (planDoneItems.length) {
+                html += '<p class="text-xs font-semibold text-emerald-700 pt-2">เก็บแล้ว</p>';
+                planDoneItems.forEach(s => { html += stopCardHtml(s.item, '✓', true); });
+            }
+            box.innerHTML = html || '<p class="text-sm text-gray-400 py-6 text-center">ไม่มีจุดที่ต้องไปเก็บในวันที่เลือก</p>';
+        }
+
+        function printPlan() {
+            const rows = planOrdered.map(s => s.item).concat(planNoCoord);
+            if (rows.length === 0) {
+                alert('ไม่มีจุดเก็บให้พิมพ์ในวันที่เลือก');
+                return;
+            }
+            const date = document.getElementById('planDate').value;
+            const printedAt = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short' });
+            const totalQty = rows.reduce((s, i) => s + (Number(i['จำนวนชิ้น']) || 1), 0);
+            const body = rows.map((i, idx) => `
+                <tr>
+                    <td class="nowrap">${idx + 1}</td>
+                    <td class="nowrap">${esc(i['รหัสคำขอ'])}</td>
+                    <td>${esc(i['ชื่อผู้ขอ'])}</td>
+                    <td class="nowrap">${esc(i['เบอร์โทรศัพท์'])}</td>
+                    <td>${esc(i['โซนพื้นที่'])}</td>
+                    <td>${esc(i['ที่อยู่และจุดวางขยะ'])}</td>
+                    <td>${esc(i['ประเภทขยะ'])} (${esc(i['จำนวนชิ้น'] || 1)})</td>
+                    <td style="width:80px"></td>
+                </tr>`).join('');
+            document.getElementById('printArea').innerHTML = `
+                <h1>ใบงานเส้นทางเก็บขยะชิ้นใหญ่และขยะอันตราย</h1>
+                <div class="meta">วันที่เก็บ: ${esc(date)} | ${rows.length} จุด ${totalQty} ชิ้น | เรียงตามลำดับแนะนำ | พิมพ์เมื่อ ${esc(printedAt)}</div>
+                <table>
+                    <thead><tr><th>ลำดับ</th><th>รหัส</th><th>ชื่อ</th><th>เบอร์โทร</th><th>ชุมชน</th>
+                    <th>ที่อยู่/จุดวางขยะ</th><th>สิ่งของ (ชิ้น)</th><th>หมายเหตุ/ลงชื่อ</th></tr></thead>
+                    <tbody>${body}</tbody>
+                </table>`;
+            window.print();
+        }
+
+        // ---------- ส่งออก CSV (เปิดด้วย Excel ได้) ----------
+        function csvCell(v) {
+            let s = String(v ?? '');
+            // กัน CSV injection: ข้อความที่ขึ้นต้นด้วย = + - @ จะถูกมองเป็นสูตรใน Excel
+            if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+
+        // เบอร์โทร: ใส่ ="..." เพื่อให้ Excel ไม่ตัดเลข 0 ข้างหน้าทิ้ง
+        function csvPhone(v) {
+            const p = String(v ?? '').replace(/[^0-9+\-\s]/g, '');
+            return '"=""' + p + '"""';
+        }
+
+        function exportCSV() {
+            if (filteredData.length === 0) {
+                alert('ไม่มีรายการให้ส่งออก');
+                return;
+            }
+            const headers = ['รหัสคำขอ', 'ชื่อผู้ขอ', 'เบอร์โทรศัพท์', 'โซนพื้นที่', 'ที่อยู่และจุดวางขยะ',
+                'พิกัดแผนที่', 'ประเภทขยะ', 'จำนวนชิ้น', 'วิธีการส่ง', 'วันนัดหมาย', 'สถานะคำขอ', 'เวลาที่ส่งคำขอ'];
+
+            const rows = filteredData.map(i => [
+                csvCell(i['รหัสคำขอ']),
+                csvCell(i['ชื่อผู้ขอ']),
+                csvPhone(i['เบอร์โทรศัพท์']),
+                csvCell(i['โซนพื้นที่']),
+                csvCell(i['ที่อยู่และจุดวางขยะ']),
+                csvCell(i['พิกัดแผนที่']),
+                csvCell(i['ประเภทขยะ']),
+                csvCell(i['จำนวนชิ้น']),
+                csvCell(i['วิธีการส่ง']),
+                csvCell(i['วันนัดหมาย']),
+                csvCell(statusOf(i)),
+                csvCell(fmtDateTime(i['created_at']))
+            ].join(','));
+
+            const csv = '\uFEFF' + headers.map(csvCell).join(',') + '\r\n' + rows.join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const t = new Date();
+            const stamp = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `waste_requests_${stamp}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        // ---------- พิมพ์ใบงานรถเก็บขยะ ----------
+        function printWorksheet() {
+            if (filteredData.length === 0) {
+                alert('ไม่มีรายการให้พิมพ์');
+                return;
+            }
+
+            // เรียงตามชุมชน แล้วตามลำดับคำขอ เพื่อให้วางแผนเส้นทางง่าย
+            const rows = [...filteredData].sort((a, b) =>
+                String(a['โซนพื้นที่'] || '').localeCompare(String(b['โซนพื้นที่'] || ''), 'th') ||
+                (Number(a['ID']) - Number(b['ID']))
+            );
+
+            const st = document.getElementById('filterStatus').value || 'ทุกสถานะ';
+            const zone = document.getElementById('filterZone').value || 'ทุกชุมชน';
+            const date = document.getElementById('filterDate').value || 'ทุกวัน';
+            const printedAt = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short' });
+            const totalQty = rows.reduce((s, i) => s + (Number(i['จำนวนชิ้น']) || 1), 0);
+
+            const body = rows.map((i, idx) => `
+                <tr>
+                    <td class="nowrap">${idx + 1}</td>
+                    <td class="nowrap">${esc(i['รหัสคำขอ'])}</td>
+                    <td>${esc(i['ชื่อผู้ขอ'])}</td>
+                    <td class="nowrap">${esc(i['เบอร์โทรศัพท์'])}</td>
+                    <td>${esc(i['โซนพื้นที่'])}</td>
+                    <td>${esc(i['ที่อยู่และจุดวางขยะ'])}</td>
+                    <td>${esc(i['ประเภทขยะ'])} (${esc(i['จำนวนชิ้น'] || 1)})</td>
+                    <td>${esc(i['วิธีการส่ง'])}</td>
+                    <td class="nowrap">${esc(i['วันนัดหมาย'])}</td>
+                    <td style="width:70px"></td>
+                </tr>`).join('');
+
+            document.getElementById('printArea').innerHTML = `
+                <h1>ใบงานเก็บขยะชิ้นใหญ่และขยะอันตราย</h1>
+                <div class="meta">
+                    สถานะ: ${esc(st)} | ชุมชน: ${esc(zone)} | วันนัดเก็บ: ${esc(date)} |
+                    รวม ${rows.length} คำขอ ${totalQty} ชิ้น | พิมพ์เมื่อ ${esc(printedAt)}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ที่</th><th>รหัส</th><th>ชื่อ</th><th>เบอร์โทร</th><th>ชุมชน</th>
+                            <th>ที่อยู่/จุดวางขยะ</th><th>สิ่งของ (ชิ้น)</th><th>วิธีทิ้ง</th><th>วันนัด</th><th>หมายเหตุ/ลงชื่อ</th>
+                        </tr>
+                    </thead>
+                    <tbody>${body}</tbody>
+                </table>`;
+
+            window.print();
+        }
+    </script>
+</body>
+</html>
