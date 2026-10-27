@@ -25,6 +25,9 @@
                     <p class="text-xs text-emerald-100 font-light opacity-90">ระบบบริการประชาชน สำหรับ อปท.</p>
                 </div>
             </div>
+            <a href="status.html" class="bg-white/15 hover:bg-white/25 border border-white/20 text-white text-xs font-semibold px-3 py-2 rounded-full transition whitespace-nowrap">
+                🔍 เช็กสถานะ
+            </a>
         </div>
     </header>
 
@@ -211,8 +214,8 @@
 
                 if (error) throw error;
 
-                alert(`ส่งคำขอสำเร็จ! รหัสคำขอของคุณคือ: ${requestCode}`);
-                location.reload();
+                alert(`ส่งคำขอสำเร็จ!\nรหัสคำขอของคุณคือ: ${requestCode}\n\nกรุณาจดรหัสนี้ไว้ ใช้เช็กสถานะคำขอได้ที่หน้า "เช็กสถานะ"`);
+                window.location.href = 'status.html?code=' + encodeURIComponent(requestCode);
             } catch (err) {
                 console.error("Error saving data:", err);
                 alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + err.message);

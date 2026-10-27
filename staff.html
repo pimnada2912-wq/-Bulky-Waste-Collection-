@@ -10,6 +10,22 @@
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Sarabun', sans-serif; }
+
+        /* ใบงานสำหรับพิมพ์ (ซ่อนบนหน้าจอ) */
+        #printArea { display: none; }
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            body > *:not(#printArea) { display: none !important; }
+            body { background: #fff !important; }
+            #printArea { display: block !important; font-family: 'Sarabun', sans-serif; color: #000; }
+            #printArea h1 { font-size: 16px; font-weight: 700; margin: 0 0 2px; }
+            #printArea .meta { font-size: 11px; margin-bottom: 8px; }
+            #printArea table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+            #printArea th, #printArea td { border: 1px solid #444; padding: 4px 5px; vertical-align: top; text-align: left; }
+            #printArea th { background: #e5e7eb; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            #printArea tr { page-break-inside: avoid; }
+            #printArea .nowrap { white-space: nowrap; }
+        }
     </style>
 </head>
 <body class="bg-slate-100 font-sans min-h-screen text-gray-800 pb-12">
@@ -89,15 +105,45 @@
         </div>
 
         <div class="bg-white rounded-2xl shadow-md p-6 border border-slate-200/80">
-            <div class="flex justify-between items-center mb-5 border-b pb-3 border-gray-100">
+            <div class="flex flex-wrap justify-between items-center gap-2 mb-4 border-b pb-3 border-gray-100">
                 <h2 class="text-base font-bold text-gray-800 flex items-center space-x-2">
                     <span>📑</span>
                     <span>รายการคำขอจากประชาชน</span>
                 </h2>
-                <button onclick="fetchRequests()" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold px-3 py-2 rounded-xl transition flex items-center space-x-1 border border-emerald-200">
-                    <span>🔄</span>
-                    <span>รีเฟรชข้อมูล</span>
-                </button>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportCSV()" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-2 rounded-xl transition border border-blue-200">
+                        ⬇️ ส่งออก Excel (CSV)
+                    </button>
+                    <button onclick="printWorksheet()" class="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold px-3 py-2 rounded-xl transition border border-purple-200">
+                        🖨️ พิมพ์ใบงาน
+                    </button>
+                    <button onclick="fetchRequests()" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold px-3 py-2 rounded-xl transition border border-emerald-200">
+                        🔄 รีเฟรชข้อมูล
+                    </button>
+                </div>
+            </div>
+
+            <!-- ตัวกรอง -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <input type="search" id="searchInput" oninput="applyFilters()" placeholder="🔍 ค้นหาชื่อ / เบอร์ / รหัส / ที่อยู่" class="p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                <select id="filterStatus" onchange="applyFilters()" class="p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                    <option value="">ทุกสถานะ</option>
+                    <option value="รอตรวจ">⏳ รอตรวจ</option>
+                    <option value="นัดหมายแล้ว">📅 นัดหมายแล้ว</option>
+                    <option value="เก็บแล้ว">✅ เก็บแล้ว</option>
+                    <option value="ไม่รับ">❌ ไม่รับ</option>
+                </select>
+                <select id="filterZone" onchange="applyFilters()" class="p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                    <option value="">ทุกชุมชน</option>
+                </select>
+                <div class="flex gap-2">
+                    <input type="date" id="filterDate" onchange="applyFilters()" class="flex-1 min-w-0 p-2.5 text-sm bg-slate-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                    <button onclick="setToday()" class="text-xs bg-slate-100 hover:bg-slate-200 border border-gray-300 rounded-xl px-2.5 font-semibold text-gray-700 whitespace-nowrap">วันนี้</button>
+                </div>
+            </div>
+            <div class="flex justify-between items-center mb-4">
+                <p id="resultInfo" class="text-xs text-gray-500"></p>
+                <button onclick="clearFilters()" class="text-xs text-gray-500 hover:text-gray-800 underline">ล้างตัวกรอง</button>
             </div>
 
             <div id="requestListContainer" class="space-y-4">
@@ -106,6 +152,9 @@
         </div>
     </main>
 
+    <!-- ใบงานสำหรับพิมพ์ -->
+    <div id="printArea"></div>
+
     <script>
         // ⚠️ URL ต้องตรงกับ project ref ใน anon key: qygskcsprypamperuors (ไม่มี g เกิน)
         const SUPABASE_URL = 'https://qygskcsprypamperuors.supabase.co';
@@ -113,6 +162,9 @@
         const TABLE_NAME = 'waste_requests';
 
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let allData = [];
+        let filteredData = [];
 
         // ---------- ระบบล็อกอิน (Supabase Auth) ----------
         let currentUserId = null;
@@ -128,17 +180,19 @@
                 appMain.classList.remove('hidden');
                 logoutBtn.classList.remove('hidden');
                 userEmail.innerText = session.user.email || '';
-                // โหลดข้อมูลเฉพาะตอนเปลี่ยนผู้ใช้ (ไม่โหลดซ้ำตอน token refresh)
                 if (currentUserId !== session.user.id) {
                     currentUserId = session.user.id;
                     fetchRequests();
                 }
             } else {
                 currentUserId = null;
+                allData = [];
+                filteredData = [];
                 appMain.classList.add('hidden');
                 logoutBtn.classList.add('hidden');
                 userEmail.innerText = '';
                 document.getElementById('requestListContainer').innerHTML = '';
+                document.getElementById('printArea').innerHTML = '';
                 loginView.classList.remove('hidden');
             }
         }
@@ -166,7 +220,6 @@
                 return;
             }
             document.getElementById('loginPassword').value = '';
-            // การแสดงหน้าหลักจัดการโดย onAuthStateChange ด้านล่าง
         }
 
         async function logout() {
@@ -182,13 +235,29 @@
             showView(session);
         };
 
-        // ป้องกันข้อความจากประชาชนแทรก HTML/สคริปต์เข้าหน้าเจ้าหน้าที่
+        // ---------- เครื่องมือช่วย ----------
         function esc(v) {
             return String(v ?? '').replace(/[&<>"']/g, c => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[c]));
         }
 
+        function fmtDateTime(v) {
+            if (!v) return '';
+            const d = new Date(v);
+            if (isNaN(d)) return '';
+            return d.toLocaleString('th-TH', {
+                timeZone: 'Asia/Bangkok',
+                day: 'numeric', month: 'short', year: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function statusOf(item) {
+            return item['สถานะคำขอ'] || 'รอตรวจ';
+        }
+
+        // ---------- ดึงข้อมูล ----------
         async function fetchRequests() {
             const container = document.getElementById('requestListContainer');
             container.innerHTML = '<p class="text-center text-gray-500 py-8">กำลังโหลดข้อมูล...</p>';
@@ -205,50 +274,91 @@
                     return;
                 }
 
-                if (!data || data.length === 0) {
-                    container.innerHTML = '<p class="text-center text-gray-400 py-12">ยังไม่มีรายการคำขอส่งเข้ามาในระบบ<br><span class="text-xs">(ถ้ามีข้อมูลในตารางแต่ขึ้นข้อความนี้ แปลว่า RLS ยังไม่มี policy แบบ SELECT)</span></p>';
-                    updateDashboardCards([]);
-                    return;
-                }
-
-                updateDashboardCards(data);
-                renderRequestList(data);
+                allData = data || [];
+                updateDashboardCards(allData);
+                rebuildZoneOptions();
+                applyFilters();
             } catch (err) {
                 console.error(err);
                 container.innerHTML = `<p class="text-red-500 text-center py-4">เกิดข้อผิดพลาดในการเชื่อมต่อ: ${esc(err.message)}</p>`;
             }
         }
 
-        function getVal(item, keys) {
-            for (let k of keys) {
-                if (item[k] !== undefined && item[k] !== null) return item[k];
-            }
-            return '';
-        }
-
         function updateDashboardCards(data) {
             document.getElementById('totalRequests').innerText = data.length;
-
-            const pending = data.filter(i => {
-                const st = getVal(i, ['สถานะคำขอ']);
-                return !st || st === 'รอตรวจ';
-            }).length;
-
-            const completed = data.filter(i => {
-                const st = getVal(i, ['สถานะคำขอ']);
-                return st === 'เก็บแล้ว' || st === 'นัดหมายแล้ว';
-            }).length;
-
-            const totalQty = data.reduce((sum, i) => sum + (Number(i['จำนวนชิ้น']) || 1), 0);
-
-            document.getElementById('pendingRequests').innerText = pending;
-            document.getElementById('completedRequests').innerText = completed;
-            document.getElementById('totalWeight').innerText = totalQty;
+            document.getElementById('pendingRequests').innerText =
+                data.filter(i => statusOf(i) === 'รอตรวจ').length;
+            document.getElementById('completedRequests').innerText =
+                data.filter(i => ['เก็บแล้ว', 'นัดหมายแล้ว'].includes(statusOf(i))).length;
+            document.getElementById('totalWeight').innerText =
+                data.reduce((sum, i) => sum + (Number(i['จำนวนชิ้น']) || 1), 0);
         }
 
+        function rebuildZoneOptions() {
+            const sel = document.getElementById('filterZone');
+            const keep = sel.value;
+            const zones = [...new Set(allData.map(i => i['โซนพื้นที่']).filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b, 'th'));
+            sel.innerHTML = '<option value="">ทุกชุมชน</option>' +
+                zones.map(z => `<option value="${esc(z)}">${esc(z)}</option>`).join('');
+            if (zones.includes(keep)) sel.value = keep;
+        }
+
+        // ---------- ค้นหา / กรอง ----------
+        function applyFilters() {
+            const q = document.getElementById('searchInput').value.trim().toLowerCase();
+            const qDigits = q.replace(/\D/g, '');
+            const st = document.getElementById('filterStatus').value;
+            const zone = document.getElementById('filterZone').value;
+            const date = document.getElementById('filterDate').value;
+
+            filteredData = allData.filter(i => {
+                if (st && statusOf(i) !== st) return false;
+                if (zone && i['โซนพื้นที่'] !== zone) return false;
+                if (date && i['วันนัดหมาย'] !== date) return false;
+                if (q) {
+                    const hay = [i['ชื่อผู้ขอ'], i['รหัสคำขอ'], i['เบอร์โทรศัพท์'], i['ที่อยู่และจุดวางขยะ']]
+                        .join(' ').toLowerCase();
+                    const phoneDigits = String(i['เบอร์โทรศัพท์'] || '').replace(/\D/g, '');
+                    const phoneHit = qDigits.length >= 3 && phoneDigits.includes(qDigits);
+                    if (!hay.includes(q) && !phoneHit) return false;
+                }
+                return true;
+            });
+
+            document.getElementById('resultInfo').innerText =
+                `แสดง ${filteredData.length} จาก ${allData.length} รายการ`;
+            renderRequestList(filteredData);
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterZone').value = '';
+            document.getElementById('filterDate').value = '';
+            applyFilters();
+        }
+
+        function setToday() {
+            const t = new Date();
+            document.getElementById('filterDate').value =
+                t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+            applyFilters();
+        }
+
+        // ---------- แสดงรายการ ----------
         function renderRequestList(data) {
             const container = document.getElementById('requestListContainer');
             container.innerHTML = '';
+
+            if (allData.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 py-12">ยังไม่มีรายการคำขอส่งเข้ามาในระบบ<br><span class="text-xs">(ถ้ามีข้อมูลในตารางแต่ขึ้นข้อความนี้ แปลว่า RLS ยังไม่มี policy แบบ SELECT)</span></p>';
+                return;
+            }
+            if (data.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 py-12">ไม่พบรายการตามเงื่อนไขที่เลือก</p>';
+                return;
+            }
 
             data.forEach(item => {
                 const card = document.createElement('div');
@@ -265,7 +375,8 @@
                 const qty = item['จำนวนชิ้น'] || 1;
                 const appDate = item['วันนัดหมาย'] || '-';
                 const method = item['วิธีการส่ง'] || '-';
-                const status = item['สถานะคำขอ'] || 'รอตรวจ';
+                const status = statusOf(item);
+                const created = fmtDateTime(item['created_at']);
 
                 let statusBadge = '';
                 if (status === 'รอตรวจ') {
@@ -301,6 +412,7 @@
                     <p class="text-xs text-gray-500 bg-white p-2.5 rounded-lg border border-gray-200">
                         🏠 <strong>จุดวางขยะ/ที่อยู่:</strong> ${esc(address)} ${mapLink}
                     </p>
+                    ${created ? `<p class="text-xs text-gray-400">🕒 ส่งคำขอเมื่อ ${esc(created)}</p>` : ''}
 
                     ${status === 'รอตรวจ' ? `
                         <div class="flex gap-2 mt-3 pt-2 border-t border-gray-200">
@@ -326,7 +438,6 @@
         async function updateStatus(id, newStatus) {
             if (!confirm(`คุณต้องการเปลี่ยนสถานะรายการนี้เป็น "${newStatus}" ใช่หรือไม่?`)) return;
 
-            // .select() ทำให้รู้ว่ามีแถวถูกอัปเดตจริงหรือไม่
             const { data, error } = await _supabase
                 .from(TABLE_NAME)
                 .update({ 'สถานะคำขอ': newStatus })
@@ -340,6 +451,109 @@
             } else {
                 fetchRequests();
             }
+        }
+
+        // ---------- ส่งออก CSV (เปิดด้วย Excel ได้) ----------
+        function csvCell(v) {
+            let s = String(v ?? '');
+            // กัน CSV injection: ข้อความที่ขึ้นต้นด้วย = + - @ จะถูกมองเป็นสูตรใน Excel
+            if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+
+        // เบอร์โทร: ใส่ ="..." เพื่อให้ Excel ไม่ตัดเลข 0 ข้างหน้าทิ้ง
+        function csvPhone(v) {
+            const p = String(v ?? '').replace(/[^0-9+\-\s]/g, '');
+            return '"=""' + p + '"""';
+        }
+
+        function exportCSV() {
+            if (filteredData.length === 0) {
+                alert('ไม่มีรายการให้ส่งออก');
+                return;
+            }
+            const headers = ['รหัสคำขอ', 'ชื่อผู้ขอ', 'เบอร์โทรศัพท์', 'โซนพื้นที่', 'ที่อยู่และจุดวางขยะ',
+                'พิกัดแผนที่', 'ประเภทขยะ', 'จำนวนชิ้น', 'วิธีการส่ง', 'วันนัดหมาย', 'สถานะคำขอ', 'เวลาที่ส่งคำขอ'];
+
+            const rows = filteredData.map(i => [
+                csvCell(i['รหัสคำขอ']),
+                csvCell(i['ชื่อผู้ขอ']),
+                csvPhone(i['เบอร์โทรศัพท์']),
+                csvCell(i['โซนพื้นที่']),
+                csvCell(i['ที่อยู่และจุดวางขยะ']),
+                csvCell(i['พิกัดแผนที่']),
+                csvCell(i['ประเภทขยะ']),
+                csvCell(i['จำนวนชิ้น']),
+                csvCell(i['วิธีการส่ง']),
+                csvCell(i['วันนัดหมาย']),
+                csvCell(statusOf(i)),
+                csvCell(fmtDateTime(i['created_at']))
+            ].join(','));
+
+            const csv = '\uFEFF' + headers.map(csvCell).join(',') + '\r\n' + rows.join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const t = new Date();
+            const stamp = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `waste_requests_${stamp}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        // ---------- พิมพ์ใบงานรถเก็บขยะ ----------
+        function printWorksheet() {
+            if (filteredData.length === 0) {
+                alert('ไม่มีรายการให้พิมพ์');
+                return;
+            }
+
+            // เรียงตามชุมชน แล้วตามลำดับคำขอ เพื่อให้วางแผนเส้นทางง่าย
+            const rows = [...filteredData].sort((a, b) =>
+                String(a['โซนพื้นที่'] || '').localeCompare(String(b['โซนพื้นที่'] || ''), 'th') ||
+                (Number(a['ID']) - Number(b['ID']))
+            );
+
+            const st = document.getElementById('filterStatus').value || 'ทุกสถานะ';
+            const zone = document.getElementById('filterZone').value || 'ทุกชุมชน';
+            const date = document.getElementById('filterDate').value || 'ทุกวัน';
+            const printedAt = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short' });
+            const totalQty = rows.reduce((s, i) => s + (Number(i['จำนวนชิ้น']) || 1), 0);
+
+            const body = rows.map((i, idx) => `
+                <tr>
+                    <td class="nowrap">${idx + 1}</td>
+                    <td class="nowrap">${esc(i['รหัสคำขอ'])}</td>
+                    <td>${esc(i['ชื่อผู้ขอ'])}</td>
+                    <td class="nowrap">${esc(i['เบอร์โทรศัพท์'])}</td>
+                    <td>${esc(i['โซนพื้นที่'])}</td>
+                    <td>${esc(i['ที่อยู่และจุดวางขยะ'])}</td>
+                    <td>${esc(i['ประเภทขยะ'])} (${esc(i['จำนวนชิ้น'] || 1)})</td>
+                    <td>${esc(i['วิธีการส่ง'])}</td>
+                    <td class="nowrap">${esc(i['วันนัดหมาย'])}</td>
+                    <td style="width:70px"></td>
+                </tr>`).join('');
+
+            document.getElementById('printArea').innerHTML = `
+                <h1>ใบงานเก็บขยะชิ้นใหญ่และขยะอันตราย</h1>
+                <div class="meta">
+                    สถานะ: ${esc(st)} | ชุมชน: ${esc(zone)} | วันนัดเก็บ: ${esc(date)} |
+                    รวม ${rows.length} คำขอ ${totalQty} ชิ้น | พิมพ์เมื่อ ${esc(printedAt)}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ที่</th><th>รหัส</th><th>ชื่อ</th><th>เบอร์โทร</th><th>ชุมชน</th>
+                            <th>ที่อยู่/จุดวางขยะ</th><th>สิ่งของ (ชิ้น)</th><th>วิธีทิ้ง</th><th>วันนัด</th><th>หมายเหตุ/ลงชื่อ</th>
+                        </tr>
+                    </thead>
+                    <tbody>${body}</tbody>
+                </table>`;
+
+            window.print();
         }
     </script>
 </body>
