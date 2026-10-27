@@ -214,8 +214,10 @@
 
                 if (error) throw error;
 
-                alert(`ส่งคำขอสำเร็จ!\nรหัสคำขอของคุณคือ: ${requestCode}\n\nกรุณาจดรหัสนี้ไว้ ใช้เช็กสถานะคำขอได้ที่หน้า "เช็กสถานะ"`);
-                window.location.href = 'status.html?code=' + encodeURIComponent(requestCode);
+                // เก็บเบอร์และวันนัดไว้ชั่วคราวในเบราว์เซอร์ เพื่อเติมให้ในหน้าเช็กสถานะ (ไม่ใส่ใน URL)
+                try { sessionStorage.setItem('prefillStatus', JSON.stringify({ phone: phone, date: appointmentDate })); } catch (e) {}
+                alert(`ส่งคำขอสำเร็จ!\nรหัสคำขอ: ${requestCode} (ใช้แจ้งเจ้าหน้าที่ได้)\n\nเช็กสถานะภายหลังได้ที่หน้า "เช็กสถานะ" โดยใช้เบอร์โทรและวันนัดหมายที่เลือกไว้`);
+                window.location.href = 'status.html';
             } catch (err) {
                 console.error("Error saving data:", err);
                 alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + err.message);
